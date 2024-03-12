@@ -1,0 +1,9 @@
+data
+target
+.vscode
+.idea
+.metals
+project/metals.sbt
+.bloop
+.bsp
+.scala-build
