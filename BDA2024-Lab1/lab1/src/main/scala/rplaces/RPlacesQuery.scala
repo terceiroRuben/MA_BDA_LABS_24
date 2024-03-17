@@ -20,32 +20,32 @@ object RPlacesQuery {
     //
     // 1. Getting started
     //
-    val spark: SparkSession = 
-        ???
-    val sc: SparkContext = 
-        ???
+    val spark: SparkSession = SparkSession.builder()
+        .appName("RPlacesQuery")
+        .master("local[*]")
+        .getOrCreate()
+    val sc: SparkContext = spark.sparkContext
 
 
     //
     // 2. Read-in r/places Data
     //
 
-    def loadPaintsRDD(): RDD[PaintEvent] = 
-        ???
+    def loadPaintsRDD(): RDD[PaintEvent] = RPlacesData.readDataset(spark, "data/paint_event_500x500.parquet")
 
-    // Change to INFO or DEBUG if need more information
+    // Change to INFO or DEBUG if need more information / De base WARN
     sc.setLogLevel("WARN")
 
     def main(args: Array[String]): Unit = {
         val paintsRDD = loadPaintsRDD()
         val q = new RPlacesQuery(spark, sc)
-        val canvas = Canvas(2000, 2000)
+        val canvas = Canvas(500, 500)
 
         val beforeWhitening = timed("Last colored event", q.lastColoredEvent(paintsRDD))
         println(beforeWhitening)
 
         val colors = Colors.idMapping.keys.toList
-
+        
         val colorRanked = timed("naive ranking", q.rankColors(colors, paintsRDD))
         println(colorRanked)
 
@@ -86,7 +86,10 @@ object RPlacesQuery {
         timing.append(s)
         print(s)
         result
+
     }
+
+
 }
 
 
@@ -98,7 +101,11 @@ class RPlacesQuery(spark: SparkSession, sc: SparkContext) {
     //
 
     def lastColoredEvent(rdd: RDD[PaintEvent]): Instant = {
-        ???
+        val nonWhiteEvents = rdd.filter(_.pixel_color_index != 31)
+        val lastNonWhiteEvent = nonWhiteEvents.reduce((event1, event2) => 
+            if (event1.timestamp.isAfter(event2.timestamp)) event1 else event2)
+
+        lastNonWhiteEvent.timestamp
     }
 
     
@@ -107,12 +114,12 @@ class RPlacesQuery(spark: SparkSession, sc: SparkContext) {
     //
 
     def occurencesOfColor(color: ColorIndex, rdd: RDD[PaintEvent]): Long = {
-        ???
-
+        rdd.filter(_.pixel_color_index == color).count()
     }
 
     def rankColors(colors: List[ColorIndex], rdd: RDD[PaintEvent]): List[(ColorIndex, Long)] = {
-        ???
+        colors.map(color => (color, occurencesOfColor(color, rdd)))
+            .sortWith(_._2 > _._2)
     }
 
     def makeColorIndex(rdd: RDD[PaintEvent]): RDD[(ColorIndex, Iterable[PaintEvent])] = {
